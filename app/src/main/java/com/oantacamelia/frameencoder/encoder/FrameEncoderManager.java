@@ -1,6 +1,7 @@
 package com.oantacamelia.frameencoder.encoder;
 
 import java.io.IOException;
+import java.nio.ByteBuffer;
 import android.media.MediaCodec;
 import android.media.MediaCodecInfo;
 import android.media.MediaFormat;
@@ -12,6 +13,10 @@ public class FrameEncoderManager implements FrameEncoder {
     private MediaCodec mediaCodec;
 
     private MediaMuxer mediaMuxer;
+
+    private String outputPath;
+
+    private int outputIndex;
 
     public FrameEncoderManager() {
         try {
@@ -48,7 +53,7 @@ public class FrameEncoderManager implements FrameEncoder {
         return result;
     }
 
-    public static class EncoderCallback extends MediaCodec.Callback {
+    private class EncoderCallback extends MediaCodec.Callback {
         @Override
         public void onInputBufferAvailable(@NonNull MediaCodec mediaCodec, int i) {
 
@@ -56,7 +61,25 @@ public class FrameEncoderManager implements FrameEncoder {
 
         @Override
         public void onOutputBufferAvailable(@NonNull MediaCodec mediaCodec, int i, @NonNull MediaCodec.BufferInfo bufferInfo) {
-
+            ByteBuffer outputBuffer = mediaCodec.getOutputBuffer(i);
+            if (bufferInfo.size != 0 && outputBuffer != null) {
+                if (mediaMuxer == null) {
+                    try {
+                        mediaMuxer = new MediaMuxer(outputPath, MediaMuxer.OutputFormat.MUXER_OUTPUT_MPEG_4);
+                        outputIndex = mediaMuxer.addTrack(mediaCodec.getOutputFormat());
+                        mediaMuxer.start();
+                    } catch (IOException e) {
+                        //TODO: Handle exception
+                        e.printStackTrace();
+                    }
+                }
+                mediaMuxer.writeSampleData(outputIndex, outputBuffer, bufferInfo);
+            }
+            if ((bufferInfo.flags & MediaCodec.BUFFER_FLAG_END_OF_STREAM) != 0) {
+                mediaMuxer.stop();
+                mediaMuxer.release();
+            }
+            mediaCodec.releaseOutputBuffer(i, false);
         }
 
         @Override
